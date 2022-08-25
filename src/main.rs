@@ -23,8 +23,12 @@ fn main() {
         .arg(Arg::with_name("yes")
             .short('y')
             .takes_value(false)
+            .action(ArgAction::SetTrue))
+        .arg(Arg::with_name("copy")
+            .short('c')
+            .takes_value(false)
             .action(ArgAction::SetTrue)
-        )
+            .requires("template_name"))
         .get_matches();
 
     let mut config_dir;
@@ -42,21 +46,21 @@ fn main() {
         match template_list {
             Err(err) => print_error(err),
             Ok(vec) => {
+                let file_path = matches.get_one::<String>("file_path");
                 if vec.contains(template_name) {
-                    let file_path = matches.get_one::<String>("file_path");
-                    let _ = copy_template(config_dir, template_name, file_path.unwrap());
+                    let _ = copy_template(&config_dir, template_name, file_path.unwrap());
                 } else {
                     let fork_result;
                     if let Some(x) = matches.get_one::<bool>("yes") {
                         if *x {
-                            fork_result = new_template(template_name, config_dir);
+                            fork_result = new_template(template_name, &config_dir);
                         } else {
                             let line = ask(format!("No template called {}, would you like to create it?", template_name).as_str(), "(y/N)");
                             // Trim ending newline
                             fork_result = match line.trim().to_lowercase().as_str() {
                                 "y" => {
                                     println!("Here");
-                                    new_template(template_name, config_dir)
+                                    new_template(template_name, &config_dir)
                                 }
                                 x => {
                                     println!("Shouldnt be Here {}", "y" == x);
@@ -67,7 +71,13 @@ fn main() {
 
                         match fork_result {
                             Err(err) => print_error(err),
-                            Ok(_) => {}
+                            Ok(_) => {
+                                if let Some(should_copy) = matches.get_one::<bool>("copy") {
+                                    if *should_copy {
+                                        let _ = copy_template(&config_dir, template_name, file_path.unwrap());
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -121,8 +131,8 @@ fn ask(question: &str, prefix: &str) -> String {
     line
 }
 
-fn copy_template(config_dir: PathBuf, template_name: &String, file_path: &String) -> Result<(), io::Error> {
-    let mut src_path = config_dir;
+fn copy_template(config_dir: &PathBuf, template_name: &String, file_path: &String) -> Result<(), io::Error> {
+    let mut src_path = config_dir.clone();
     let mut dest_path = PathBuf::from(file_path);
     src_path.push(template_name);
     dest_path.push(template_name);
@@ -131,10 +141,10 @@ fn copy_template(config_dir: PathBuf, template_name: &String, file_path: &String
     Ok(())
 }
 
-fn new_template(template_name: &String, app_dir: PathBuf) -> Result<(), io::Error> {
+fn new_template(template_name: &String, app_dir: &PathBuf) -> Result<(), io::Error> {
     // Form the tmp dir path with file name + extension for editor syntax highlighting
     let tmp_path: PathBuf = [TMP_DIR, template_name].iter().collect();
-    let mut dest_dir = app_dir;
+    let mut dest_dir = app_dir.clone();
     dest_dir.push(template_name);
     // TODO: Make a fallback for systems that don't use the 'editor' command. ($EDITOR or $VISUAL)
     // Spawn 'editor' with the tmp path
