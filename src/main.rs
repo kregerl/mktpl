@@ -16,15 +16,18 @@ fn main() {
             .default_value(".")
             .requires("template_name"))
         .arg(Arg::with_name("list")
+            .help("List possible templates")
             .exclusive(true)
             .long("list")
             .short('l')
             .action(ArgAction::SetTrue))
         .arg(Arg::with_name("yes")
+            .help("Assume yes to prompts")
             .short('y')
             .takes_value(false)
             .action(ArgAction::SetTrue))
         .arg(Arg::with_name("copy")
+            .help("Copy template to specified <file_path> after creation")
             .short('c')
             .takes_value(false)
             .action(ArgAction::SetTrue)
@@ -46,12 +49,16 @@ fn main() {
         match template_list {
             Err(err) => print_error(err),
             Ok(vec) => {
-                let file_path = matches.get_one::<String>("file_path");
+                // Defaults to '.' if not specified.
+                let file_path = matches.get_one::<String>("file_path").unwrap();
                 if vec.contains(template_name) {
-                    let _ = copy_template(&config_dir, template_name, file_path.unwrap());
+                    if let Err(e) = copy_template(&config_dir, template_name, file_path) {
+                        print_error(e);
+                        return;
+                    }
                 } else {
-                    let fork_result;
                     if let Some(x) = matches.get_one::<bool>("yes") {
+                        let fork_result;
                         if *x {
                             fork_result = new_template(template_name, &config_dir);
                         } else {
@@ -59,12 +66,11 @@ fn main() {
                             // Trim ending newline
                             fork_result = match line.trim().to_lowercase().as_str() {
                                 "y" => {
-                                    println!("Here");
                                     new_template(template_name, &config_dir)
                                 }
-                                x => {
-                                    println!("Shouldnt be Here {}", "y" == x);
-                                    Ok(())
+                                _ => {
+                                    println!("Did not create template called {}", template_name);
+                                    return;
                                 }
                             };
                         }
@@ -74,7 +80,10 @@ fn main() {
                             Ok(_) => {
                                 if let Some(should_copy) = matches.get_one::<bool>("copy") {
                                     if *should_copy {
-                                        let _ = copy_template(&config_dir, template_name, file_path.unwrap());
+                                        if let Err(e) = copy_template(&config_dir, template_name, file_path) {
+                                            print_error(e);
+                                            return;
+                                        }
                                     }
                                 }
                             }
